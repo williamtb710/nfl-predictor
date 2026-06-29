@@ -108,7 +108,7 @@ if __name__ == "__main__":
     mlflow.set_experiment("nfl-wr-predictor")
 
     df = load_features()
-    train, test = train_test_split_by_season(df, test_season=2024)
+    train, test = train_test_split_by_season(df, test_season=2025)
 
     print("\n--- Model Comparison ---")
     train_baseline(train, test)

@@ -46,19 +46,19 @@ def build_wr_features(weekly, schedules):
         match = schedule_lookup[
             (schedule_lookup['season'] == row['season']) &
             (schedule_lookup['week'] == row['week']) &
-            ((schedule_lookup['home_team'] == row['recent_team']) |
-             (schedule_lookup['away_team'] == row['recent_team']))
+            ((schedule_lookup['home_team'] == row['team']) |
+             (schedule_lookup['away_team'] == row['team']))
         ]
         if len(match) == 0:
             return np.nan
-        return 1 if match.iloc[0]['home_team'] == row['recent_team'] else 0
+        return 1 if match.iloc[0]['home_team'] == row['team'] else 0
 
     wr['is_home'] = wr.apply(get_home_flag, axis=1)
 
     # --- Select final feature columns ---
     feature_cols = [
         'player_id', 'player_name', 'season', 'week',
-        'recent_team', 'opponent_team', 'is_home',
+        'team', 'opponent_team', 'is_home',
         'receiving_yards_roll3', 'receiving_yards_roll5',
         'targets_roll3', 'targets_roll5',
         'receptions_roll3', 'receptions_roll5',
