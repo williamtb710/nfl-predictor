@@ -104,6 +104,54 @@ def train_xgboost(train, test):
 
     return model, mae, rmse
 
+def tune_xgboost(train, test):
+    import optuna
+    optuna.logging.set_verbosity(optuna.logging.WARNING)
+
+    X_train = train[FEATURE_COLS]
+    y_train = train[TARGET]
+    X_test = test[FEATURE_COLS]
+    y_test = test[TARGET]
+
+    def objective(trial):
+        params = {
+            'n_estimators': trial.suggest_int('n_estimators', 100, 500),
+            'max_depth': trial.suggest_int('max_depth', 3, 8),
+            'learning_rate': trial.suggest_float('learning_rate', 0.01, 0.3, log=True),
+            'subsample': trial.suggest_float('subsample', 0.6, 1.0),
+            'colsample_bytree': trial.suggest_float('colsample_bytree', 0.6, 1.0),
+            'min_child_weight': trial.suggest_int('min_child_weight', 1, 10),
+            'random_state': 42
+        }
+        model = xgb.XGBRegressor(**params)
+        model.fit(X_train, y_train, verbose=False)
+        preds = model.predict(X_test)
+        return mean_absolute_error(y_test, preds)
+
+    study = optuna.create_study(direction='minimize')
+    study.optimize(objective, n_trials=50, show_progress_bar=True)
+
+    print(f"\nBest MAE: {study.best_value:.1f} yards")
+    print(f"Best params: {study.best_params}")
+
+    # Retrain with best params
+    best_model = xgb.XGBRegressor(**study.best_params, random_state=42)
+    best_model.fit(X_train, y_train, verbose=False)
+    y_pred = best_model.predict(X_test)
+    mae, rmse = evaluate("XGBoost (tuned)", y_test, y_pred)
+
+    with mlflow.start_run(run_name="xgboost_tuned"):
+        mlflow.log_params(study.best_params)
+        mlflow.log_metric("mae", mae)
+        mlflow.log_metric("rmse", rmse)
+
+    os.makedirs("models", exist_ok=True)
+    with open("models/xgboost_wr.pkl", "wb") as f:
+        pickle.dump(best_model, f)
+    print("  Tuned model saved to models/xgboost_wr.pkl")
+
+    return best_model
+
 if __name__ == "__main__":
     mlflow.set_experiment("nfl-wr-predictor")
 
@@ -114,5 +162,8 @@ if __name__ == "__main__":
     train_baseline(train, test)
     ridge_model, _, _ = train_ridge(train, test)
     xgb_model, _, _ = train_xgboost(train, test)
+
+    print("\n--- Optuna Tuning ---")
+    tuned_model = tune_xgboost(train, test)
 
     print("\nDone. Check MLflow UI with: mlflow ui")
