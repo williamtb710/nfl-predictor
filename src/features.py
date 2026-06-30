@@ -38,6 +38,36 @@ def build_wr_features(weekly, schedules):
 
     wr = wr.merge(opp_strength, on=['season', 'opponent_team'], how='left')
 
+    # --- Vegas lines from schedules ---
+    schedules_lookup = schedules[['season', 'week', 'home_team', 'away_team', 'total_line', 'spread_line']].copy()
+
+    # For each player's team, get the total line and whether they are favored
+    def get_vegas_features(row):
+        match = schedules_lookup[
+            (schedules_lookup['season'] == row['season']) &
+            (schedules_lookup['week'] == row['week']) &
+            ((schedules_lookup['home_team'] == row['team']) |
+             (schedules_lookup['away_team'] == row['team']))
+        ]
+        if len(match) == 0:
+            return pd.Series({'total_line': np.nan, 'team_implied_total': np.nan})
+        
+        game = match.iloc[0]
+        total = game['total_line']
+        spread = game['spread_line']
+        
+        # Implied total = (total + spread) / 2 for home team, (total - spread) / 2 for away
+        if game['home_team'] == row['team']:
+            implied = (total - spread) / 2
+        else:
+            implied = (total + spread) / 2
+            
+        return pd.Series({'total_line': total, 'team_implied_total': implied})
+
+    vegas = wr.apply(get_vegas_features, axis=1)
+    wr['total_line'] = vegas['total_line']
+    wr['team_implied_total'] = vegas['team_implied_total']
+
     # --- Home/away from schedules ---
     # Build a lookup: for each game, which team is home
     schedule_lookup = schedules[['season', 'week', 'home_team', 'away_team']].copy()
@@ -67,6 +97,7 @@ def build_wr_features(weekly, schedules):
         'receiving_epa_roll3', 'receiving_epa_roll5',
         'yards_season_avg', 'targets_season_avg',
         'opp_yards_allowed_per_game',
+        'total_line', 'team_implied_total',
         'receiving_yards'  # target variable
     ]
 
